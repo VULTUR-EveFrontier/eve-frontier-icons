@@ -1,0 +1,42 @@
+{
+  "name": "eve-frontier-icons",
+  "version": "1.0.0",
+  "description": "CDN deployment and management for EVE Frontier asset icons",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "deploy:s3": "node scripts/deploy-to-s3.js",
+    "deploy:s3:dry": "DRY_RUN=true node scripts/deploy-to-s3.js",
+    "deploy:s3:force": "FORCE_UPLOAD=true node scripts/deploy-to-s3.js",
+    "deploy:cloudfront": "node scripts/deploy-to-cloudfront.js",
+    "help": "node scripts/deploy-to-s3.js --help"
+  },
+  "keywords": [
+    "eve-frontier",
+    "cdn",
+    "s3",
+    "cloudfront",
+    "assets",
+    "icons",
+    "deployment"
+  ],
+  "author": "EVE Frontier Developer Community",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/eve-frontier-icons"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.705.0",
+    "@aws-sdk/client-cloudfront": "^3.705.0",
+    "@aws-sdk/credential-providers": "^3.705.0",
+    "mime-types": "^2.1.35"
+  },
+  "devDependencies": {},
+  "peerDependencies": {
+    "eve-frontier-tools": "^1.0.0"
+  }
+} 
