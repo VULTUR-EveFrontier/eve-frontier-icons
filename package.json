@@ -8,7 +8,7 @@
     "deploy:s3": "node scripts/deploy-to-s3.js",
     "deploy:s3:dry": "DRY_RUN=true node scripts/deploy-to-s3.js",
     "deploy:s3:force": "FORCE_UPLOAD=true node scripts/deploy-to-s3.js",
-    "deploy:cloudfront": "node scripts/deploy-to-cloudfront.js",
+    "setup:cors": "SETUP_CORS=true && node scripts/deploy-to-s3.js",
     "help": "node scripts/deploy-to-s3.js --help"
   },
   "keywords": [
@@ -30,13 +30,10 @@
     "url": "https://github.com/your-username/eve-frontier-icons"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.705.0",
     "@aws-sdk/client-cloudfront": "^3.705.0",
+    "@aws-sdk/client-s3": "^3.705.0",
     "@aws-sdk/credential-providers": "^3.705.0",
+    "dotenv": "^17.0.1",
     "mime-types": "^2.1.35"
-  },
-  "devDependencies": {},
-  "peerDependencies": {
-    "eve-frontier-tools": "^1.0.0"
   }
-} 
+}

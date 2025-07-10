@@ -183,13 +183,21 @@ npm run deploy:s3
 S3_BUCKET_NAME=test-bucket npm run deploy:s3:dry
 ```
 
-## Cache Headers
+## Cache Headers & Permissions
 
-The deployment automatically sets optimal cache headers:
+The deployment automatically sets optimal cache headers and permissions:
+
+### Cache Headers
 
 - **Images** (PNG): `public, max-age=31536000, immutable` (1 year)
 - **Manifest** (JSON): `public, max-age=300` (5 minutes)  
 - **Other files**: `public, max-age=86400` (1 day)
+
+### Public Access
+
+- **All objects** are automatically uploaded with `public-read` ACL
+- **No bucket policy configuration required** - objects are immediately accessible
+- **Global CDN distribution** ready out of the box
 
 ## Workflow Integration
 

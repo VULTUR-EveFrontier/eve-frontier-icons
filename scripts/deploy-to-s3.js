@@ -4,7 +4,16 @@
  * EVE Frontier Assets S3-Compatible Deployment Script
  * 
  * Uploads extracted frontier assets to S3-compatible storage (AWS S3, DigitalOcean Spaces, etc.)
- * for CDN distribution. Supports versioning, cache headers, and proper MIME types.
+ * for CDN distribution. Supports versioning, cache headers, proper MIME types, automatic 
+ * public read permissions, and CORS configuration for global accessibility.
+ * 
+ * Features:
+ * - Automatic public read ACL for all uploaded objects
+ * - CORS configuration for cross-origin access
+ * - Versioning with auto-generated timestamps
+ * - Change detection using MD5 hashes
+ * - Proper MIME types and cache headers
+ * - Dry run and force upload modes
  * 
  * Supported Providers:
  * - AWS S3
@@ -13,13 +22,16 @@
  * - Any S3-compatible storage service
  */
 
-import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
 import { fromIni } from '@aws-sdk/credential-providers';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import mime from 'mime-types';
+
+import dotenv from 'dotenv';
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +52,10 @@ const config = {
   version: process.env.DEPLOY_VERSION || generateVersion(),
   dryRun: process.env.DRY_RUN === 'true',
   force: process.env.FORCE_UPLOAD === 'true',
+  setupCors: process.env.SETUP_CORS === 'true',
+  
+  // CORS Configuration
+  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:3000,https://vultur.one').split(','),
   
   // Cache Configuration
   cacheControl: {
@@ -155,11 +171,12 @@ async function uploadFile(s3Client, localPath, s3Key, options = {}) {
     ContentType: mimeType,
     CacheControl: cacheControl,
     ContentMD5: Buffer.from(fileHash, 'hex').toString('base64'),
+    ACL: 'public-read', // Ensure global read access
     ...options
   };
   
   if (config.dryRun) {
-    console.log(`🔍 [DRY RUN] Would upload ${s3Key} (${mimeType}, ${Math.round(fileBuffer.length / 1024)}KB)`);
+    console.log(`🔍 [DRY RUN] Would upload ${s3Key} (${mimeType}, ${Math.round(fileBuffer.length / 1024)}KB) with public-read ACL`);
     return { uploaded: true, dryRun: true };
   }
   
@@ -282,11 +299,12 @@ async function uploadLatestManifest(s3Client) {
     Key: s3Key,
     Body: JSON.stringify(versionedManifest, null, 2),
     ContentType: 'application/json',
-    CacheControl: config.cacheControl.manifest
+    CacheControl: config.cacheControl.manifest,
+    ACL: 'public-read' // Ensure global read access
   };
   
   if (config.dryRun) {
-    console.log(`🔍 [DRY RUN] Would upload latest manifest to ${s3Key}`);
+    console.log(`🔍 [DRY RUN] Would upload latest manifest to ${s3Key} with public-read ACL`);
     return { uploaded: true, dryRun: true };
   }
   
@@ -297,6 +315,52 @@ async function uploadLatestManifest(s3Client) {
     return { uploaded: true };
   } catch (error) {
     console.error('❌ Failed to upload latest manifest:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Configure CORS for the bucket to allow cross-origin access
+ */
+async function configureCors(s3Client) {
+  console.log('🌐 Configuring CORS settings...');
+  
+  const corsConfiguration = {
+    CORSRules: [
+      {
+        AllowedOrigins: config.corsOrigins,
+        AllowedMethods: ['GET', 'HEAD'],
+        AllowedHeaders: ['*'],
+        MaxAgeSeconds: 3600,
+        ExposeHeaders: ['ETag']
+      }
+    ]
+  };
+  
+  if (config.dryRun) {
+    console.log('🔍 [DRY RUN] Would configure CORS with the following settings:');
+    console.log('   Origins:', config.corsOrigins.join(', '));
+    console.log('   Methods: GET, HEAD');
+    console.log('   Headers: *');
+    console.log('   Max Age: 3600 seconds');
+    console.log('   Expose Headers: ETag');
+    return { configured: true, dryRun: true };
+  }
+  
+  try {
+    const command = new PutBucketCorsCommand({
+      Bucket: config.bucket,
+      CORSConfiguration: corsConfiguration
+    });
+    
+    await s3Client.send(command);
+    console.log('✅ CORS configuration applied successfully');
+    console.log('   Origins:', config.corsOrigins.join(', '));
+    console.log('   Methods: GET, HEAD');
+    console.log('   Max Age: 3600 seconds');
+    return { configured: true };
+  } catch (error) {
+    console.error('❌ Failed to configure CORS:', error.message);
     throw error;
   }
 }
@@ -355,6 +419,10 @@ function printDeploymentInfo() {
   console.log(`🏷️  Version:        ${config.version}`);
   console.log(`🔧 Dry Run:        ${config.dryRun ? 'Yes' : 'No'}`);
   console.log(`💪 Force Upload:   ${config.force ? 'Yes' : 'No'}`);
+  console.log(`🌐 Setup CORS:     ${config.setupCors ? 'Yes' : 'No'}`);
+  if (config.setupCors) {
+    console.log(`   CORS Origins:   ${config.corsOrigins.join(', ')}`);
+  }
   console.log(`📁 Source Dir:     ${config.extractedDir}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
@@ -368,6 +436,11 @@ async function deploy() {
     await validateConfig();
     
     const s3Client = createS3Client();
+    
+    // Configure CORS if requested
+    if (config.setupCors) {
+      await configureCors(s3Client);
+    }
     
     // Upload icons
     const iconResults = await uploadIcons(s3Client);
@@ -395,6 +468,9 @@ async function deploy() {
     console.log('📋 Deployment Summary:');
     console.log(`   📁 Icons: ${iconResults.uploaded} uploaded, ${iconResults.skipped} skipped`);
     console.log(`   📄 Manifest: uploaded to versioned and latest paths`);
+    if (config.setupCors) {
+      console.log(`   🌐 CORS: configured for ${config.corsOrigins.length} origins`);
+    }
     console.log('');
     console.log('🔗 CDN URLs:');
     console.log(`   Versioned: ${cdnDomain}/${config.keyPrefix}/${config.version}/`);
@@ -426,6 +502,7 @@ USAGE:
   npm run deploy:s3              Deploy to S3-compatible storage
   npm run deploy:s3:dry          Dry run (no actual upload)
   npm run deploy:s3:force        Force upload all files
+  npm run deploy:s3:cors         Deploy and configure CORS
 
 ENVIRONMENT VARIABLES:
   S3_BUCKET_NAME                 Bucket/Space name (required)
@@ -438,18 +515,21 @@ ENVIRONMENT VARIABLES:
   DEPLOY_VERSION                 Deployment version (auto-generated)
   DRY_RUN                        Perform dry run (true/false)
   FORCE_UPLOAD                   Force upload all files (true/false)
+  SETUP_CORS                     Configure CORS settings (true/false)
+  CORS_ORIGINS                   Comma-separated list of allowed origins (default: http://localhost:3000,https://vultur.one)
 
 EXAMPLES:
   # AWS S3
   S3_BUCKET_NAME=my-bucket npm run deploy:s3
   AWS_PROFILE=prod S3_BUCKET_NAME=prod-assets npm run deploy:s3
   
-  # DigitalOcean Spaces
+  # DigitalOcean Spaces with CORS
   S3_BUCKET_NAME=my-space \\
   S3_ENDPOINT=https://nyc3.digitaloceanspaces.com \\
   S3_ACCESS_KEY_ID=your-key \\
   S3_SECRET_ACCESS_KEY=your-secret \\
   S3_REGION=nyc3 \\
+  SETUP_CORS=true \\
   npm run deploy:s3
   
   # MinIO
