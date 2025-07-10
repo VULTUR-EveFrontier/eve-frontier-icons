@@ -8,7 +8,7 @@
     "deploy:s3": "node scripts/deploy-to-s3.js",
     "deploy:s3:dry": "DRY_RUN=true node scripts/deploy-to-s3.js",
     "deploy:s3:force": "FORCE_UPLOAD=true node scripts/deploy-to-s3.js",
-    "setup:cors": "SETUP_CORS=true && node scripts/deploy-to-s3.js",
+    "setup:cors": "SETUP_CORS=true node scripts/deploy-to-s3.js",
     "help": "node scripts/deploy-to-s3.js --help"
   },
   "keywords": [

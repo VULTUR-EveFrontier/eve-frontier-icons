@@ -55,7 +55,7 @@ const config = {
   setupCors: process.env.SETUP_CORS === 'true',
   
   // CORS Configuration
-  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:3000,https://vultur.one').split(','),
+  corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:3000').split(','),
   
   // Cache Configuration
   cacheControl: {
@@ -84,6 +84,7 @@ function generateVersion() {
 function createS3Client() {
   const clientConfig = {
     region: config.region,
+    ...(config.endpoint ? { forcePathStyle: true } : {})
   };
 
   // Configure custom endpoint for non-AWS providers
